@@ -1,0 +1,104 @@
+ <!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>لعبة إطفاء عود الثقاب</title>
+<style>
+:root{--bg:#0f1b3d;--fg:#f5e6b3;--gold:#e8b84a;--card:#1a2a5e}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,"Segoe UI",Tahoma,sans-serif;display:flex;flex-direction:column;align-items:center;padding:env(safe-area-inset-top,0px) 8px env(safe-area-inset-bottom,0px);touch-action:none;user-select:none}
+header{display:flex;gap:10px;justify-content:space-between;width:100%;max-width:420px;padding:8px 4px;font-weight:700}
+header span{background:var(--card);border:1px solid var(--gold);border-radius:10px;padding:4px 10px;font-size:15px}
+.wrap{position:relative;width:100%;max-width:420px}
+canvas{width:100%;height:auto;max-height:calc(100vh - 110px);aspect-ratio:2/3;border-radius:14px;border:2px solid var(--gold);display:block;background:#16275a;touch-action:none}
+#ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(10,16,40,.82);border-radius:14px;text-align:center;padding:20px}
+#ov h2{margin:0;color:var(--gold)}
+#ov p{margin:0;line-height:1.7}
+button{background:var(--gold);color:#1a1a1a;border:0;border-radius:12px;padding:10px 28px;font-size:18px;font-weight:700;cursor:pointer}
+.hint{font-size:13px;opacity:.8;padding:6px;text-align:center}
+</style>
+</head>
+<body>
+<header><span>النقاط: <b id="sc">0</b></span><span>المستوى: <b id="lv">1</b></span><span>القطرات: <b id="bl">6</b></span></header>
+<div class="wrap">
+<canvas id="c" width="400" height="600"></canvas>
+<div id="ov"><h2>🔥 لعبة إطفاء عود الثقاب</h2><p>حرّك إصبعك (أو الفأرة) لتحديد موضع قطرة الماء في الأعلى،<br>ثم ارفع إصبعك (أو انقر) لإسقاطها وإطفاء لهب العود المتحرك.</p><button id="go">ابدأ</button></div>
+</div>
+<div class="hint">كل لهب تطفئه يمنحك قطرة إضافية ويزيد السرعة</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d'),W=400,H=600,SH=500,SL=150;
+const $=id=>document.getElementById(id);
+let score,level,drops,m,ball,state,parts,aimX,msg,msgT,wait,best=0,T=0;
+function reset(){score=0;level=1;drops=6;parts=[];aimX=W/2;ball=null;state='aim';msg='';msgT=0;newMatch();ui()}
+function newMatch(){m={x:80+Math.random()*240,d:Math.random()<.5?-1:1,out:false}}
+function speed(){return 1.4+level*.45}
+function ui(){$('sc').textContent=score;$('lv').textContent=level;$('bl').textContent=drops}
+function px(e){const r=cv.getBoundingClientRect();return Math.max(16,Math.min(W-16,(e.clientX-r.left)*W/r.width))}
+cv.addEventListener('pointerdown',e=>{if(state==='aim')aimX=px(e)});
+cv.addEventListener('pointermove',e=>{if(state==='aim')aimX=px(e)});
+cv.addEventListener('pointerup',e=>{if(state==='aim'&&!$('ov').offsetParent){aimX=px(e);drop()}});
+function drop(){ball={x:aimX,y:50,vy:0,r:12};state='fall';drops--;ui()}
+function hit(){
+ const b=ball,c=[[m.x,SH-SL,14],[m.x,SH-SL-26,22]];
+ for(const [x,y,r] of c){if((b.x-x)**2+(b.y-y)**2<(r+b.r+3)**2)return true}
+ return b.x>m.x-9&&b.x<m.x+9&&b.y>SH-SL&&b.y<SH}
+function splash(x,y,n){for(let i=0;i<n;i++){const a=-Math.PI*Math.random();parts.push({k:'d',x,y,vx:Math.cos(a)*(1+Math.random()*3),vy:Math.sin(a)*(2+Math.random()*4),sz:2+Math.random()*3,life:1})}}
+function extinguish(){
+ m.out=true;splash(m.x,SH-SL-20,22);
+ for(let i=0;i<30;i++)parts.push({k:'s',x:m.x+(Math.random()-.5)*10,y:SH-SL-10-Math.random()*20,vx:(Math.random()-.5)*.8,vy:-.6-Math.random()*1.6,sz:5+Math.random()*6,life:1});
+ score+=10*level;drops++;level++;msg='انطفأ! +'+10*(level-1);msgT=70;ui();
+ ball=null;state='wait';wait=70}
+function end(){state='over';best=Math.max(best,score);$('ov').innerHTML='<h2>انتهت اللعبة</h2><p>نقاطك: '+score+'<br>أفضل نتيجة: '+best+'</p><button id="go2">العب من جديد</button>';$('ov').style.display='flex';$('go2').onclick=()=>{$('ov').style.display='none';reset()}}
+function step(){
+ T++;
+ if(!m.out){m.x+=m.d*speed();if(m.x<40){m.x=40;m.d=1}if(m.x>W-40){m.x=W-40;m.d=-1}}
+ if(state==='fall'){
+  const y0=ball.y;ball.vy+=.45;const y1=y0+ball.vy;let ok=false;
+  for(let k=1;k<=8;k++){ball.y=y0+(y1-y0)*k/8;if(!m.out&&hit()){extinguish();ok=true;break}}
+  if(!ok&&ball.y>SH-ball.r){splash(ball.x,SH,10);ball=null;state='wait';wait=40;msg='تفاداها العود!';msgT=50}
+ }
+ if(state==='wait'){wait--;if(wait<=0){if(m.out){newMatch();state='aim'}else if(drops<=0)end();else state='aim'}}
+ parts.forEach(p=>{if(p.k==='d'){p.vy+=.3;p.x+=p.vx;p.y+=p.vy;if(p.y>SH){p.y=SH;p.vy*=-.2;p.vx*=.6}p.life-=.02}else{p.x+=p.vx+Math.sin(T/9+p.y/20)*.3;p.y+=p.vy;p.sz+=.12;p.life-=.011}});
+ parts=parts.filter(p=>p.life>0);
+ if(msgT>0)msgT--;
+}
+function flame(x,y){
+ const h=36+Math.sin(T*.4+x)*5+Math.random()*3;
+ const g=ctx.createRadialGradient(x,y-h/2,2,x,y-h/2,46);g.addColorStop(0,'rgba(255,170,60,.45)');g.addColorStop(1,'rgba(255,170,60,0)');
+ ctx.fillStyle=g;ctx.fillRect(x-50,y-h-40,100,120);
+ [[16,h,'#ff7a1a'],[10,h*.7,'#ffc93c'],[5,h*.4,'#fff6c0']].forEach(([w,hh,c])=>{ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(x+Math.sin(T*.3)*2,y-hh);ctx.quadraticCurveTo(x+w,y-hh*.35,x,y+2);ctx.quadraticCurveTo(x-w,y-hh*.35,x+Math.sin(T*.3)*2,y-hh);ctx.fill()})}
+function drawMatch(){
+ const x=m.x,top=SH-SL;
+ ctx.fillStyle='#d9a860';ctx.fillRect(x-5,top,10,SL);
+ ctx.fillStyle='#b9823c';ctx.fillRect(x+1,top,4,SL);
+ ctx.fillStyle=m.out?'#2b2b2b':'#c0262d';ctx.beginPath();ctx.ellipse(x,top,12,15,0,0,7);ctx.fill();
+ ctx.fillStyle='rgba(255,255,255,.25)';ctx.beginPath();ctx.ellipse(x-4,top-5,3,5,0,0,7);ctx.fill();
+ if(!m.out)flame(x,top-10)}
+function drawDrop(x,y){
+ const g=ctx.createLinearGradient(x-12,y-18,x+12,y+16);g.addColorStop(0,'#bfe8ff');g.addColorStop(1,'#2f7fd6');
+ ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(x,y-20);ctx.bezierCurveTo(x+4,y-8,x+12,y-2,x+12,y+4);ctx.arc(x,y+4,12,0,Math.PI,false);ctx.bezierCurveTo(x-12,y-2,x-4,y-8,x,y-20);ctx.fill();
+ ctx.fillStyle='rgba(255,255,255,.7)';ctx.beginPath();ctx.ellipse(x-4,y+3,2.5,4.5,.3,0,7);ctx.fill()}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ ctx.fillStyle='rgba(245,230,179,.5)';
+ for(let i=0;i<30;i++)ctx.fillRect((i*97)%W,(i*53)%300,1.6,1.6);
+ ctx.fillStyle='#2a3b7a';ctx.fillRect(0,28,W,6);
+ ctx.fillStyle='#8a5a2b';ctx.fillRect(0,SH,W,16);ctx.fillStyle='#6b4420';ctx.fillRect(0,SH+16,W,H-SH-16);
+ ctx.fillStyle='#a8743c';ctx.fillRect(0,SH,W,4);
+ drawMatch();
+ if(state==='aim'){
+  ctx.strokeStyle='rgba(245,230,179,.35)';ctx.setLineDash([5,6]);ctx.beginPath();ctx.moveTo(aimX,70);ctx.lineTo(aimX,SH);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#e8b84a';ctx.fillRect(aimX-3,34,6,12);drawDrop(aimX,64)}
+ else if(ball)drawDrop(ball.x,ball.y);
+ parts.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life)*(p.k==='s'?.5:1);ctx.fillStyle=p.k==='s'?'#9aa3b5':'#7fc4ff';ctx.beginPath();ctx.arc(p.x,p.y,p.sz,0,7);ctx.fill()});
+ ctx.globalAlpha=1;
+ if(msgT>0){ctx.globalAlpha=Math.min(1,msgT/20);ctx.fillStyle='#e8b84a';ctx.font='bold 28px system-ui';ctx.textAlign='center';ctx.fillText(msg,W/2,230);ctx.globalAlpha=1}
+}
+function loop(){if(state!=='over'&&!$('ov').offsetParent)step();draw();requestAnimationFrame(loop)}
+$('go').onclick=()=>{$('ov').style.display='none'};
+reset();loop();
+</script>
+</body>
+</html>
